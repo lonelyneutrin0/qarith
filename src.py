@@ -1,55 +1,152 @@
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 import qiskit
-from numpy import pi
+import numpy as np 
 from qiskit_aer import Aer
+from typing import Tuple 
 #############################################################
 #                 Quantum Fourier Transform                 #
 #############################################################
 
-def qft_(circuit: QuantumCircuit, n: int): 
+def QFT(self: QuantumCircuit, 
+        target: QuantumRegister=None, 
+        target_range: Tuple[int, int]=None, 
+        )->None: 
     """
-    Recursive function for applying Quantum Fourier Transform (reverse qubit order) 
+    Quantum Fourier Transform.
+    
+    Parameters
+    -----------
+    
+    self : QuantumCircuit 
+        The circuit to which the QFT is applied. 
+    
+    target : QuantumCircuit, optional
+        The register to which the QFT is applied.
+        If not specified, QFT is applied to the entire circuit.
+    
+    range : Tuple(min, max), optional. max exclusive
+        The range of qubits over which the QFT is applied. 
+        If not specific, QFT is applied to the selected 
+        target or the entire circuit. 
+    
+    Return Object
+    --------------
+    Does not return an object. Purely a mutator method
     """
-    if n == 0: 
-        return circuit
-    # Zero indexing
-    n -= 1 
-    circuit.h(n)
-    for qubit in range(n): 
-        circuit.cp(pi/(2**(n-qubit)), qubit, n)
-    qft_(circuit, n)
+    circuit = self
 
-def swap_(circuit: QuantumCircuit, n: int): 
+    if target is None and target_range is None:
+        n = circuit.num_qubits
+        # Quantum Fourier Transform 
+        for i in range(n): 
+            circuit.h(n-i-1)
+            for j in range(n-i-1):
+                circuit.cp(np.pi/2**(n-i-1-j), j, n-i-1)
+        
+        # Swapping
+        for i in range(n//2): 
+            circuit.swap(i, n-1-i)
+    
+    elif target_range is None: 
+        for i in range(target.size): 
+            circuit.h(target[target.size-i-1])
+            for j in range(target.size-i-1): 
+                circuit.cp(np.pi/2**(target.size-i-1-j), target[j], target[target.size-i-1])
+        
+        for i in range(target.size//2): 
+            circuit.swap(target[i], target[target.size-i-1])
+    
+    else: 
+        n = target_range[1] - target_range[0] 
+        for i in range(n): 
+            circuit.h(target_range[0] + n-i-1)
+            for j in range(n-i-1):
+                circuit.cp(np.pi/2**(n-i-1-j), target_range[0] + j, target_range[0] + n-i-1)
+        # Swapping
+        for i in range(n//2): 
+            circuit.swap(target_range[0] + i, target_range[0] + n-1-i)
+
+def QFTCircuit(n: int)->QuantumCircuit: 
+    """ 
+    Returns a quantum Fourier transform circuit.
+
+    Parameters
+    -----------
+
+    n : int
+        Number of qubits to create the circuit with.
+
+    Return Object
+    --------------
+    
+    QuantumCircuit
     """
-    Swapping function to ensure proper qubit order 
-    """
+
+    circuit = QuantumCircuit(n)
+    for i in range(n): 
+        circuit.h(n-i-1)
+        for j in range(n-i-1):
+            circuit.cp(np.pi/2**(n-i-1-j), j, n-i-1)
+    
+    # Swapping
     for i in range(n//2): 
-        circuit.swap(i, n-i-1)
+        circuit.swap(i, n-1-i)
+    
     return circuit
 
-def QFT(circuit: QuantumCircuit): 
+def iQFT(self: QuantumCircuit, 
+        target: QuantumRegister=None, 
+        target_range: Tuple[int, int]=None)->None:
     """
-    Quantum Fourier Transform 
+    Inverse Quantum Fourier Transform.
+    
+    Parameters
+    -----------
+    
+    self : QuantumCircuit 
+        The circuit to which the iQFT is applied. 
+    
+    target : QuantumCircuit, optional
+        The register to which the iQFT is applied.
+        If not specified, QFT is applied to the entire circuit.
+    
+    range : Tuple(min, max), optional. max exclusive
+        The range of qubits over which the QFT is applied. 
+        If not specific, QFT is applied to the selected 
+        target or the entire circuit. 
+    
+    Return Object
+    --------------
+    Does not return an object. Purely a mutator method
     """
-    n = circuit.num_qubits 
-    qft_(circuit, n)
-    swap_(circuit, n)
-    return circuit
+    if target is None and target_range is None: 
+        n = self.num_qubits
+        qft_circ = QFTCircuit(n)
+        invqft_circ = qft_circ.inverse()
+        invqft_circ.decompose() 
+        self.append(invqft_circ, self.qubits[:n])
+    elif target_range is None: 
+        n = target.size
+        qft_circ = QFTCircuit(n)
+        invqft_circ = qft_circ.inverse()
+        invqft_circ.decompose() 
+        self.append(invqft_circ, target)
+    
+    else: 
+        n = target_range[1]-target_range[0]
+        qft_circ = QFTCircuit(n)
+        invqft_circ = qft_circ.inverse()
+        invqft_circ.decompose() 
+        self.append(invqft_circ, qargs=np.arange(start=target_range[0], stop=target_range[1]).tolist())        
 
-def iQFT(circuit, n):
-    """
-    Inverse Quantum Fourier Transform 
-    """
-    qft_circ = QFT(circuit=QuantumCircuit(n))
-    invqft_circ = qft_circ.inverse()
-    circuit.append(invqft_circ, circuit.qubits[:n])
-    return circuit.decompose()
+QuantumCircuit.QFT = QFT
+QuantumCircuit.iQFT = iQFT
 
 #############################################################
 #                 Quantum Arithmetic Gates                  #
 #############################################################
 
-def NQubitAdder(
+def FullCarryAdder(
         A: QuantumRegister, 
         B: QuantumRegister, 
         carry_in: QuantumRegister=None, 
