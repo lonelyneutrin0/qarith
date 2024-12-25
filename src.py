@@ -68,6 +68,9 @@ def QFT(self: QuantumCircuit,
 
 def QFTCircuit(n: int)->QuantumCircuit: 
     """ 
+    Implementation Specifications
+    ------------------------------
+
     Returns a quantum Fourier transform circuit.
 
     Parameters
@@ -243,3 +246,82 @@ def FullCarryAdder(
             circuit.measure(carry_out[i], c_carry_out[i])
         
         return circuit
+
+def Adder(self: QuantumCircuit, A: QuantumRegister, B: QuantumRegister, sum: QuantumRegister=None)->None: 
+    """ 
+    Implementation Specifications
+    ------------------------------
+    Quantum Fourier Transform based adder gate. |A⟩|B⟩ ↦ |A⟩|A+B⟩ OR |A⟩|B⟩|0⟩ ↦ |A⟩|B⟩|A+B⟩
+    
+    Qubit Requirement - (2N+2) for 2 N-Qubit Integers
+    
+    Strictly speaking, only 2N Qubits are needed for the gate.
+    However, QFT-based addition is intrinsically modular. 
+    Hence, the function actually operates on a qudit as |A⟩|B⟩ ↦ |A⟩|A+B mod 2^d⟩.
+    This is resolved by represented the qudits in d+1 qubits (e.g. 011 -> 0011)
+    
+    Parameters
+    ----------- 
+
+    self : QuantumCircuit 
+        The circuit to which the gate is to be added. 
+    
+    A : QuantumRegister, size d [see qubit requirements above]
+        The first input register for the sum 
+    
+    B : QuantumRegister, size d [see qubit requirements above]
+        The second input register for the sum 
+    
+    sum : QuantumRegister, size d [see qubit requirements above], optional 
+        The output register for the sum. 
+        Defaults to None, output is mapped to B
+
+    Return Object
+    ---------------
+
+    None : This is purely a mutator method 
+    """
+    
+    # Check gate sizes 
+    if A.size != B.size: raise ValueError("Improper register size!")
+    
+    # If a designated sum register is not specified
+    if(sum is None): 
+
+        # QFT on B 
+        for i in range(B.size): 
+            self.h(B[B.size-i-1])
+            for j in range(B.size-i-1): 
+                self.cp(np.pi/2**(B.size-i-1-j), B[j], B[B.size-i-1])
+        
+        # QFT from A to B
+        for i in range(B.size): 
+            for j in range(B.size-i-1): 
+                self.cp(np.pi/2**(B.size-i-1-j), A[j], B[B.size-i-1])   
+            
+        # Phase Shifts from A 
+        for i in range(B.size): 
+            self.cp(np.pi, A[i], B[i])
+        for i in range(B.size//2): 
+            self.swap(B[i], B[B.size-i-1])          
+        
+        self.iQFT(B)
+    
+    else: 
+        if sum.size != A.size: raise ValueError("Improper registry size!")
+        for i in range(sum.size): 
+            self.h(sum[sum.size-i-1])
+            for j in range(sum.size-i-1): 
+                self.cp(np.pi/2**(sum.size-i-1-j), A[j], sum[sum.size-i-1])
+        for i in range(sum.size): 
+            for j in range(sum.size-i-1): 
+                self.cp(np.pi/2**(sum.size-i-1-j), B[j], sum[sum.size-i-1])   
+        for i in range(sum.size): 
+            self.cp(np.pi, A[i], sum[i])
+            self.cp(np.pi, B[i], sum[i])
+        for i in range(sum.size//2): 
+            self.swap(sum[i], sum[sum.size-i-1])   
+        
+        self.iQFT(sum)
+        
+QuantumCircuit.Adder = Adder
